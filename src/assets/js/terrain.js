@@ -9,7 +9,7 @@ export const TERRAIN_PRESETS = {
   rolling: {
     color: 0x00ff66,
     octaves: [
-      { freq: 0.012, amp: 10 },
+      { freq: 0.012, amp: 15 },
       { freq: 0.05, amp: 3 },
     ],
   },
@@ -24,8 +24,8 @@ export const TERRAIN_PRESETS = {
   peaks: {
     color: 0xff2266,
     octaves: [
-      { freq: 0.006, amp: 20 },
-      { freq: 0.025, amp: 10 },
+      { freq: 0.006, amp: 50 },
+      { freq: 0.025, amp: 30 },
       { freq: 0.08, amp: 8 },
       { freq: 0.25, amp: 2 },
     ],
@@ -42,16 +42,28 @@ export function randomPreset() {
   return PRESET_LIST[Math.floor(Math.random() * PRESET_LIST.length)];
 }
 
+//Height -> colour tint
+
+const LOW_BRIGHTNESS = 0.005;
+const HIGH_BRIGHTNESS = 0.1;
+const PEAK_HEIGHT_FRACTION = 3;
+
+function presetAmplitude(preset) {
+  let sum = 0;
+  for (const { amp } of preset.octaves) sum += amp;
+  return sum;
+}
+
 /* ------------------------------------------------------------------ *
  * Preset field
  *
  * Which preset applies is a pure function of the NOISE-SPACE Z. Every chunk
  * samples the same function, so at a shared edge two neighbours compute the
- *
+ * same values.
  * ------------------------------------------------------------------ */
 
 export const PRESET_BAND_LENGTH = 2560; // length of primary preset
-export const PRESET_BLEND_WIDTH = 2000; // length of each crossfade
+export const PRESET_BLEND_WIDTH = 1000; // length of each crossfade
 
 function smoothstep(t) {
   return t * t * (3 - 2 * t);
@@ -90,7 +102,7 @@ function shuffledCycle(cycle) {
 export function presetIndexForBand(band) {
   const n = PRESET_LIST.length;
   const cycle = Math.floor(band / n);
-  const pos = band - cycle * n; // 0..n-1, correct for negative bands too
+  const pos = band - cycle * n;
   return shuffledCycle(cycle)[pos];
 }
 
@@ -125,9 +137,6 @@ export function presetMixAt(z) {
   return [{ preset: current, weight: 1 }];
 }
 
-/**
- * Generates heights AND vertex colours for a plane geometry.
- */
 export function generateHeights(geometry, segments, chunkSize, worldOrigin) {
   const position = geometry.attributes.position;
   const colorAttr = geometry.attributes.color;
@@ -147,12 +156,17 @@ export function generateHeights(geometry, segments, chunkSize, worldOrigin) {
     let cr = 0;
     let cg = 0;
     let cb = 0;
+    let amp = 0;
     for (const { preset, weight } of mix) {
       scratch.setHex(preset.color);
       cr += scratch.r * weight;
       cg += scratch.g * weight;
       cb += scratch.b * weight;
+      amp += presetAmplitude(preset) * weight;
     }
+
+    const peak = amp * PEAK_HEIGHT_FRACTION;
+    const invPeak = peak > 0 ? 1 / peak : 0;
 
     for (let ix = 0; ix <= segments; ix++) {
       const i = iy * vertsPerRow + ix;
@@ -164,7 +178,15 @@ export function generateHeights(geometry, segments, chunkSize, worldOrigin) {
       }
       position.setY(i, h);
 
-      if (colorAttr) colorAttr.setXYZ(i, cr, cg, cb);
+      if (colorAttr) {
+        let t = h * invPeak;
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+
+        t = t * t;
+
+        const b = LOW_BRIGHTNESS + (HIGH_BRIGHTNESS - LOW_BRIGHTNESS) * t;
+        colorAttr.setXYZ(i, cr * b, cg * b, cb * b);
+      }
     }
   }
 
@@ -178,6 +200,8 @@ export function createTerrain(options = {}) {
     chunkSize = 320,
     segments = 64,
     worldOrigin = { x: 0, z: 0 },
+    wireframe = false,
+    shininess = 4,
   } = options;
 
   const geometry = new THREE.PlaneGeometry(
@@ -196,15 +220,20 @@ export function createTerrain(options = {}) {
 
   generateHeights(geometry, segments, chunkSize, worldOrigin);
 
-  const material = new THREE.MeshBasicMaterial({
+  const material = new THREE.MeshPhongMaterial({
+    color: 0xffffff,
     vertexColors: true,
-    wireframe: true,
     side: THREE.DoubleSide,
+    wireframe,
+    shininess,
+    specular: 0x111111,
   });
 
-  return new THREE.Mesh(geometry, material);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
 }
-
 export function regenerateTerrain(mesh, segments, chunkSize, worldOrigin) {
   generateHeights(mesh.geometry, segments, chunkSize, worldOrigin);
 }

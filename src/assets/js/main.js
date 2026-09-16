@@ -19,7 +19,7 @@ scene.add(stars);
 function animate() {
   requestAnimationFrame(animate);
 
-  const speed = 0.5;
+  const speed = 2;
 
   updateStarfield(stars);
   updateChunks(chunks, speed, camera.position.z);

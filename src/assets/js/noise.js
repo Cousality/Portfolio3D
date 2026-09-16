@@ -37,7 +37,7 @@ export function valueNoise(x, y, freq) {
 }
 
 /**
- * Sum of octaves of value noise, in roughly [-1, 1] before amplitude scaling.
+ * Sum of octaves of value noise
  * @param {number} x
  * @param {number} y
  * @param {{freq:number, amp:number}[]} octaves

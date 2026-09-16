@@ -1,8 +1,8 @@
 import * as THREE from "three";
 
 /**
- * Sets up the core scene, camera, and renderer, adds ambient lighting,
- * and wires up the window resize handler.
+ * Sets up the core scene, camera, and renderer, adds ambient + overhead
+ * directional lighting, and wires up the window resize handler.
  *
  * @param {object} [options]
  * @param {string} [options.canvasSelector="#bg"]
@@ -11,8 +11,11 @@ import * as THREE from "three";
  * @param {number} [options.far=2000]
  * @param {{x: number, y: number, z: number}} [options.cameraPosition={x:0,y:25,z:200}]
  * @param {number} [options.ambientColor=0x404040]
- * @param {number} [options.ambientIntensity=0.25]
- * @returns {{ scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer, light: THREE.AmbientLight }}
+ * @param {number} [options.ambientIntensity=0.6]
+ * @param {number} [options.sunColor=0xffffff]
+ * @param {number} [options.sunIntensity=1.8]
+ * @param {{x: number, y: number, z: number}} [options.sunPosition]
+ * @returns {{ scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer, light: THREE.AmbientLight, sun: THREE.DirectionalLight }}
  */
 export function createScene(options = {}) {
   const {
@@ -20,9 +23,12 @@ export function createScene(options = {}) {
     fov = 65,
     near = 0.1,
     far = 1000,
-    cameraPosition = { x: 0, y: 50, z: 200 },
+    cameraPosition = { x: 0, y: 100, z: 200 },
     ambientColor = 0x404040,
-    ambientIntensity = 0.25,
+    ambientIntensity = 0.6,
+    sunColor = 0xffffff,
+    sunIntensity = 1.8,
+    sunPosition = { x: 300, y: 800, z: 250 },
   } = options;
 
   const scene = new THREE.Scene();
@@ -38,6 +44,11 @@ export function createScene(options = {}) {
   const light = new THREE.AmbientLight(ambientColor, ambientIntensity);
   scene.add(light);
 
+  const sun = new THREE.DirectionalLight(sunColor, sunIntensity);
+  sun.position.set(sunPosition.x, sunPosition.y, sunPosition.z);
+  scene.add(sun);
+  scene.add(sun.target);
+
   const renderer = new THREE.WebGLRenderer({
     canvas: document.querySelector(canvasSelector),
   });
@@ -50,5 +61,5 @@ export function createScene(options = {}) {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  return { scene, camera, renderer, light };
+  return { scene, camera, renderer, light, sun };
 }

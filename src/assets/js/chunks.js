@@ -15,7 +15,7 @@ export function createChunkPool(scene) {
     const mesh = createTerrain({
       chunkSize: CHUNK_SIZE,
       segments: SEGMENTS,
-      worldOrigin: { x: 0, z }, // scene pos == noise pos at spawn
+      worldOrigin: { x: 0, z },
     });
 
     mesh.position.set(0, 0, z);
@@ -30,15 +30,11 @@ export function createChunkPool(scene) {
 export function updateChunks(chunks, speed, cameraZ) {
   let recycled = 0;
 
-  // 1) Move everything first so the min we find is the real back edge.
   for (const c of chunks) c.position.z += speed;
 
   let minZ = Infinity;
   for (const c of chunks) if (c.position.z < minZ) minZ = c.position.z;
 
-  // 2) Recycle anything past the camera, stacking each one behind the back
-  //    and advancing the noise-space Z so it samples new terrain.
-  //    The preset is no longer stored per chunk — it falls out of worldZ.
   for (const c of chunks) {
     if (c.position.z - CHUNK_SIZE / 2 > cameraZ) {
       minZ -= CHUNK_SIZE;

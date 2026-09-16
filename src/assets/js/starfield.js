@@ -2,12 +2,12 @@ import * as THREE from "three";
 
 const DEFAULTS = {
   count: 800,
-  spread: 600, // horizontal (X) spread
-  depth: 1000, // how far behind the camera stars are placed
+  spread: 600,
+  depth: 1000,
   color: 0xffffff,
   size: 0.7,
-  skyBase: 60, // lowest Y a star may occupy
-  skyHeight: 400, // vertical thickness of the sky band
+  skyBase: 60,
+  skyHeight: 400,
 };
 
 function randomStarY(skyBase, skyHeight) {
@@ -17,13 +17,13 @@ function randomStarY(skyBase, skyHeight) {
 /**
  *
  * @param {object} [options]
- * @param {number} [options.count=800]  - number of stars
- * @param {number} [options.spread=600]  - random X spread
- * @param {number} [options.depth=1000]  - max distance stars are placed behind the camera
+ * @param {number} [options.count=800]
+ * @param {number} [options.spread=600]
+ * @param {number} [options.depth=1000]
  * @param {number} [options.color=0xffffff]
- * @param {number} [options.size=0.7]    - point size
- * @param {number} [options.skyBase=80]  - lowest Y a star can spawn at
- * @param {number} [options.skyHeight=400] - vertical extent of the sky band
+ * @param {number} [options.size=0.7]
+ * @param {number} [options.skyBase=80]
+ * @param {number} [options.skyHeight=400]
  * @returns {THREE.Points}
  */
 export function createStarfield(options = {}) {
@@ -49,7 +49,7 @@ export function createStarfield(options = {}) {
   const material = new THREE.PointsMaterial({ color, size });
 
   const points = new THREE.Points(geometry, material);
-  // Remember the spawn settings so respawns match the initial distribution.
+
   points.userData.starOptions = opts;
   return points;
 }
