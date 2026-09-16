@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { fbm } from "./noise.js";
+import { fbm, fbmRidged } from "./noise.js";
 
 /* ------------------------------------------------------------------ *
  * Presets
@@ -30,13 +30,78 @@ export const TERRAIN_PRESETS = {
       { freq: 0.25, amp: 2 },
     ],
   },
+  ridges: {
+    // Sharp, folded mountain ridges instead of smooth bumps.
+    color: 0x8fa3bf,
+    heightFn: "ridged",
+    peakScale: 0.6,
+    octaves: [
+      { freq: 0.01, amp: 40 },
+      { freq: 0.04, amp: 15 },
+      { freq: 0.12, amp: 5 },
+    ],
+  },
+
+  mesas: {
+    // Height is quantized into steps, producing flat-topped plateaus and
+    // canyon-like cliffs between them.
+    color: 0xc9622f,
+    heightFn: "mesas",
+    terraceStep: 8,
+    octaves: [
+      { freq: 0.006, amp: 35 },
+      { freq: 0.03, amp: 8 },
+    ],
+  },
+  badlands: {
+    // High-frequency ridged noise reads as eroded, jagged terrain.
+    color: 0x8a6238,
+    heightFn: "ridged",
+    peakScale: 0.6,
+    octaves: [
+      { freq: 0.02, amp: 20 },
+      { freq: 0.08, amp: 10 },
+      { freq: 0.2, amp: 4 },
+    ],
+  },
 };
 
 export const PRESET_LIST = [
   TERRAIN_PRESETS.rolling,
   TERRAIN_PRESETS.mountains,
   TERRAIN_PRESETS.peaks,
+  TERRAIN_PRESETS.ridges,
+  TERRAIN_PRESETS.mesas,
+  TERRAIN_PRESETS.badlands,
 ];
+
+/**
+ * Computes terrain height at a world-space point for a given preset,
+ * dispatching to the shaping function the preset asks for. Every branch
+ * still takes the preset's own octaves, so amplitude/frequency tuning
+ * behaves the same way it always has - only the underlying noise shape
+ * changes.
+ *
+ * @param {object} preset
+ * @param {number} wx world-space x
+ * @param {number} wz world-space z
+ * @returns {number}
+ */
+function heightAt(preset, wx, wz) {
+  switch (preset.heightFn) {
+    case "ridged":
+      return fbmRidged(wx, wz, preset.octaves);
+
+    case "mesas": {
+      const h = fbm(wx, wz, preset.octaves);
+      const step = preset.terraceStep ?? 6;
+      return Math.round(h / step) * step;
+    }
+
+    default:
+      return fbm(wx, wz, preset.octaves);
+  }
+}
 
 export function randomPreset() {
   return PRESET_LIST[Math.floor(Math.random() * PRESET_LIST.length)];
@@ -162,7 +227,7 @@ export function generateHeights(geometry, segments, chunkSize, worldOrigin) {
       cr += scratch.r * weight;
       cg += scratch.g * weight;
       cb += scratch.b * weight;
-      amp += presetAmplitude(preset) * weight;
+      amp += presetAmplitude(preset) * (preset.peakScale ?? 1) * weight;
     }
 
     const peak = amp * PEAK_HEIGHT_FRACTION;
@@ -174,7 +239,7 @@ export function generateHeights(geometry, segments, chunkSize, worldOrigin) {
 
       let h = 0;
       for (const { preset, weight } of mix) {
-        h += weight * fbm(wx, wz, preset.octaves);
+        h += weight * heightAt(preset, wx, wz);
       }
       position.setY(i, h);
 
@@ -201,7 +266,7 @@ export function createTerrain(options = {}) {
     segments = 64,
     worldOrigin = { x: 0, z: 0 },
     wireframe = false,
-    shininess = 4,
+    shininess = 30,
   } = options;
 
   const geometry = new THREE.PlaneGeometry(

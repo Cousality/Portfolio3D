@@ -11,7 +11,7 @@ const stars = createStarfield({
   count: 1000,
   spread: 2000,
   depth: 1200,
-  skyBase: 200,
+  skyBase: 400,
   skyHeight: 500,
 });
 scene.add(stars);

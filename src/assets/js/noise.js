@@ -17,7 +17,7 @@ function lerp(a, b, t) {
  * 2D value noise in [0, 1). Continuous everywhere.
  * @param {number} x
  * @param {number} y
- * @param {number} freq  larger = smaller features
+ * @param {number} freq
  */
 export function valueNoise(x, y, freq) {
   const fx = x * freq;
@@ -47,6 +47,37 @@ export function fbm(x, y, octaves) {
   let sum = 0;
   for (const { freq, amp } of octaves) {
     sum += (valueNoise(x, y, freq) * 2 - 1) * amp;
+  }
+  return sum;
+}
+
+/**
+ * Ridged noise in [0, 1]. Folds value noise around its midpoint so that
+ * zero-crossings become sharp crests instead of smooth hills - good for
+ * jagged mountain ridges and eroded badlands.
+ * @param {number} x
+ * @param {number} y
+ * @param {number} freq
+ */
+export function ridgedNoise(x, y, freq) {
+  const n = valueNoise(x, y, freq) * 2 - 1;
+  return 1 - Math.abs(n);
+}
+
+/**
+ * Sum of octaves of ridged noise. Unlike fbm() this is unsigned (each
+ * octave contributes in [0, amp]), which produces spiky, mostly-upward
+ * terrain rather than rolling hills.
+ * @param {number} x
+ * @param {number} y
+ * @param {{freq:number, amp:number}[]} octaves
+ * @returns {number}
+ */
+export function fbmRidged(x, y, octaves) {
+  let sum = 0;
+  for (const { freq, amp } of octaves) {
+    const r = ridgedNoise(x, y, freq);
+    sum += r * r * amp;
   }
   return sum;
 }
