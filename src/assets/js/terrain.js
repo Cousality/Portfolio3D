@@ -1,165 +1,152 @@
 import * as THREE from "three";
+import { fbm } from "./noise.js";
 
 /**
- *
- *
- * @param {THREE.PlaneGeometry} geometry
- * @param {number} size - segments per side, must be a power of 2
- * @param {object} [options]
- * @param {number} [options.initialRange=20] - max height offset for the four corners
- * @param {number} [options.roughness=0.55] - decay rate of the random range per iteration
- */
-export function diamondSquare(geometry, size, options = {}) {
-  const { initialRange = 20, roughness = 0.55 } = options;
-
-  const position = geometry.attributes.position;
-  const vertsPerRow = size + 1;
-
-  const idx = (x, y) => y * vertsPerRow + x;
-  const setHeight = (x, y, z) => position.setZ(idx(x, y), z);
-  const getHeight = (x, y) => position.getZ(idx(x, y));
-  const randomOffset = (range) => (Math.random() * 2 - 1) * range;
-
-  // Seed the four corners
-  setHeight(0, 0, randomOffset(initialRange));
-  setHeight(size, 0, randomOffset(initialRange));
-  setHeight(0, size, randomOffset(initialRange));
-  setHeight(size, size, randomOffset(initialRange));
-
-  let stepSize = size;
-  let range = initialRange;
-
-  while (stepSize > 1) {
-    const half = stepSize / 2;
-
-    // Diamond step: center of each square = average of its 4 corners
-    for (let y = half; y < size; y += stepSize) {
-      for (let x = half; x < size; x += stepSize) {
-        const avg =
-          (getHeight(x - half, y - half) +
-            getHeight(x + half, y - half) +
-            getHeight(x - half, y + half) +
-            getHeight(x + half, y + half)) /
-          4;
-        setHeight(x, y, avg + randomOffset(range));
-      }
-    }
-
-    // Square step: midpoint of each diamond edge = average of its neighbors
-    for (let y = 0; y <= size; y += half) {
-      for (let x = (y + half) % stepSize; x <= size; x += stepSize) {
-        let sum = 0;
-        let count = 0;
-
-        if (x - half >= 0) {
-          sum += getHeight(x - half, y);
-          count++;
-        }
-        if (x + half <= size) {
-          sum += getHeight(x + half, y);
-          count++;
-        }
-        if (y - half >= 0) {
-          sum += getHeight(x, y - half);
-          count++;
-        }
-        if (y + half <= size) {
-          sum += getHeight(x, y + half);
-          count++;
-        }
-
-        setHeight(x, y, sum / count + randomOffset(range));
-      }
-    }
-
-    stepSize = half;
-    range *= roughness;
-  }
-
-  position.needsUpdate = true;
-}
-
-/**
- * Builds a wireframe terrain mesh with diamond-square generated heights.
- *
- * @param {object} [options]
- * @param {number} [options.planeSize=160]
- * @param {number} [options.segments=32] - must be a power of 2
- * @param {number} [options.color=0x00ccaa]
- * @param {number} [options.initialRange=20]
- * @param {number} [options.roughness=0.55]
- * @returns {THREE.Mesh}
+ * Terrain presets. Each is a set of noise octaves plus a wireframe color.
+ * Octaves are summed: low freq = big shapes, high freq = fine detail.
  */
 
-export function createTerrain(options = {}) {
-  const {
-    planeSize = 160,
-    segments = 32,
-    color = 0x00ccaa,
-    initialRange = 20,
-    roughness = 0.55,
-  } = options;
-
-  const geometry = new THREE.PlaneGeometry(
-    planeSize,
-    planeSize,
-    segments,
-    segments,
-  );
-
-  const material = new THREE.MeshBasicMaterial({
-    color,
-    wireframe: true,
-    side: THREE.DoubleSide,
-  });
-
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.rotation.x = Math.PI / 2; // XY plane -> XZ plane
-
-  diamondSquare(geometry, segments, { initialRange, roughness });
-
-  return mesh;
-}
-// terrain.js additions
-
-/**
- * Terrain "moods" — each defines a distinct feel.
- */
 export const TERRAIN_PRESETS = {
-  flat: { initialRange: 4, roughness: 0.45, color: 0x224466 },
-  rolling: { initialRange: 12, roughness: 0.55, color: 0x00ccaa },
-  mountains: { initialRange: 35, roughness: 0.62, color: 0xcc6644 },
-  peaks: { initialRange: 60, roughness: 0.68, color: 0xdddddd },
+  flat: {
+    color: 0x2266ff, // strong blue
+    octaves: [{ freq: 0.01, amp: 4 }],
+  },
+  rolling: {
+    color: 0x00ff66, // bright green
+    octaves: [
+      { freq: 0.012, amp: 10 },
+      { freq: 0.05, amp: 3 },
+    ],
+  },
+  mountains: {
+    color: 0xffaa00, // amber
+    octaves: [
+      { freq: 0.008, amp: 30 },
+      { freq: 0.03, amp: 10 },
+      { freq: 0.1, amp: 3 },
+    ],
+  },
+  peaks: {
+    color: 0xff2266, // hot pink/magenta
+    octaves: [
+      { freq: 0.006, amp: 55 },
+      { freq: 0.025, amp: 20 },
+      { freq: 0.08, amp: 8 },
+      { freq: 0.25, amp: 2 },
+    ],
+  },
 };
 
 /**
- * Rebuilds an existing terrain mesh's geometry with new diamond-square
- * parameters. Avoids allocating a new mesh, so we can recycle chunks.
- *
- * @param {THREE.Mesh} mesh - from createTerrain()
- * @param {number} segments
- * @param {{initialRange:number, roughness:number, color:number}} preset
+ * Weighted distribution of presets
  */
-export function regenerateTerrain(mesh, segments, preset) {
-  const { initialRange, roughness, color } = preset;
-
-  // Reset the Z attribute to 0 so diamond-square starts clean.
-  const position = mesh.geometry.attributes.position;
-  for (let i = 0; i < position.count; i++) {
-    position.setZ(i, 0);
-  }
-
-  diamondSquare(mesh.geometry, segments, { initialRange, roughness });
-  mesh.material.color.setHex(color);
-}
-
-/**
- * Picks a random preset, weighted so extremes are rarer.
- */
-export function randomPreset() {
+/*export function randomPreset() {
   const r = Math.random();
   if (r < 0.35) return TERRAIN_PRESETS.flat;
   if (r < 0.7) return TERRAIN_PRESETS.rolling;
   if (r < 0.92) return TERRAIN_PRESETS.mountains;
   return TERRAIN_PRESETS.peaks;
+}
+  */
+
+/**
+ * De bugging random preset selection. Each preset has equal chance of being selected.
+ */
+export function randomPreset() {
+  const all = [
+    TERRAIN_PRESETS.flat,
+    TERRAIN_PRESETS.rolling,
+    TERRAIN_PRESETS.mountains,
+    TERRAIN_PRESETS.peaks,
+  ];
+  return all[Math.floor(Math.random() * all.length)];
+}
+
+/**
+ * Generates heights for a plane geometry based on a preset.
+ * @param {THREE.PlaneGeometry} geometry
+ * @param {number} segments                 // segments per side (power of 2)
+ * @param {number} chunkSize                // world size of the chunk
+ * @param {{x:number, z:number}} worldOrigin // chunk center in world space
+ * @param {{octaves: {freq:number, amp:number}[]}} preset
+ */
+export function generateHeights(
+  geometry,
+  segments,
+  chunkSize,
+  worldOrigin,
+  preset,
+) {
+  const position = geometry.attributes.position;
+  const vertsPerRow = segments + 1;
+  const step = chunkSize / segments;
+  const half = chunkSize / 2;
+  const { x: ox, z: oz } = worldOrigin;
+
+  // After geometry.rotateX(-PI/2), local X = world X, local Z = world Z.
+  for (let iy = 0; iy <= segments; iy++) {
+    for (let ix = 0; ix <= segments; ix++) {
+      const i = iy * vertsPerRow + ix;
+
+      const lx = -half + ix * step;
+      const lz = -half + iy * step;
+
+      const wx = ox + lx;
+      const wz = oz + lz;
+
+      position.setY(i, fbm(wx, wz, preset.octaves));
+    }
+  }
+
+  position.needsUpdate = true;
+  geometry.computeVertexNormals();
+}
+
+export function createTerrain(options = {}) {
+  const {
+    chunkSize = 160,
+    segments = 32,
+    worldOrigin = { x: 0, z: 0 },
+    preset = TERRAIN_PRESETS.rolling,
+  } = options;
+
+  const geometry = new THREE.PlaneGeometry(
+    chunkSize,
+    chunkSize,
+    segments,
+    segments,
+  );
+  geometry.rotateX(-Math.PI / 2); // Now plane lies in XZ, height is Y.
+
+  generateHeights(geometry, segments, chunkSize, worldOrigin, preset);
+
+  const material = new THREE.MeshBasicMaterial({
+    color: preset.color,
+    wireframe: true,
+    side: THREE.DoubleSide,
+  });
+
+  const mesh = new THREE.Mesh(geometry, material);
+  // No mesh.rotation — geometry is already in world orientation.
+  return mesh;
+}
+
+/**
+ *
+ * @param {THREE.Mesh} mesh
+ * @param {number} segments
+ * @param {number} chunkSize
+ * @param {{x:number, z:number}} worldOrigin
+ * @param {object} preset
+ */
+
+export function regenerateTerrain(
+  mesh,
+  segments,
+  chunkSize,
+  worldOrigin,
+  preset,
+) {
+  generateHeights(mesh.geometry, segments, chunkSize, worldOrigin, preset);
+  mesh.material.color.setHex(preset.color);
 }

@@ -1,20 +1,30 @@
 import "../css/style.css";
 import { createScene } from "./scene.js";
-import { createTerrain } from "./terrain.js";
 import { createStarfield, updateStarfield } from "./starfield.js";
+import {
+  createChunkPool,
+  updateChunks,
+  SEGMENTS,
+  CHUNK_SIZE,
+} from "./chunks.js";
+import { TERRAIN_PRESETS } from "./terrain.js";
 
 const { scene, camera, renderer } = createScene();
 
-const terrain = createTerrain();
-scene.add(terrain);
+// One preset for the whole run keeps edges perfectly seamless.
+const preset = TERRAIN_PRESETS.rolling;
+
+const chunks = createChunkPool(scene, preset);
 
 const stars = createStarfield();
 scene.add(stars);
 
 function animate() {
   requestAnimationFrame(animate);
+
   updateStarfield(stars);
-  terrain.position.z += 0.05;
+  updateChunks(chunks, 0.2, camera.position.z, preset);
+
   renderer.render(scene, camera);
 }
 
