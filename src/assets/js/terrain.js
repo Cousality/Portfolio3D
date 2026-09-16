@@ -1,25 +1,20 @@
 import * as THREE from "three";
 import { fbm } from "./noise.js";
 
-/**
- * Terrain presets. Each is a set of noise octaves plus a wireframe color.
- * Octaves are summed: low freq = big shapes, high freq = fine detail.
- */
+/* ------------------------------------------------------------------ *
+ * Presets
+ * ------------------------------------------------------------------ */
 
 export const TERRAIN_PRESETS = {
-  flat: {
-    color: 0x2266ff, // strong blue
-    octaves: [{ freq: 0.01, amp: 4 }],
-  },
   rolling: {
-    color: 0x00ff66, // bright green
+    color: 0x00ff66,
     octaves: [
       { freq: 0.012, amp: 10 },
       { freq: 0.05, amp: 3 },
     ],
   },
   mountains: {
-    color: 0xffaa00, // amber
+    color: 0xffaa00,
     octaves: [
       { freq: 0.008, amp: 30 },
       { freq: 0.03, amp: 10 },
@@ -27,7 +22,7 @@ export const TERRAIN_PRESETS = {
     ],
   },
   peaks: {
-    color: 0xff2266, // hot pink/magenta
+    color: 0xff2266,
     octaves: [
       { freq: 0.006, amp: 20 },
       { freq: 0.025, amp: 10 },
@@ -37,68 +32,144 @@ export const TERRAIN_PRESETS = {
   },
 };
 
-/**
- * Weighted distribution of presets
- */
-/*export function randomPreset() {
-  const r = Math.random();
-  if (r < 0.35) return TERRAIN_PRESETS.flat;
-  if (r < 0.7) return TERRAIN_PRESETS.rolling;
-  if (r < 0.92) return TERRAIN_PRESETS.mountains;
-  return TERRAIN_PRESETS.peaks;
-}
-  */
+export const PRESET_LIST = [
+  TERRAIN_PRESETS.rolling,
+  TERRAIN_PRESETS.mountains,
+  TERRAIN_PRESETS.peaks,
+];
 
-/**
- * De bugging random preset selection. Each preset has equal chance of being selected.
- */
 export function randomPreset() {
-  const all = [
-    TERRAIN_PRESETS.flat,
-    TERRAIN_PRESETS.rolling,
-    TERRAIN_PRESETS.mountains,
-    TERRAIN_PRESETS.peaks,
-  ];
-  return all[Math.floor(Math.random() * all.length)];
+  return PRESET_LIST[Math.floor(Math.random() * PRESET_LIST.length)];
+}
+
+/* ------------------------------------------------------------------ *
+ * Preset field
+ *
+ * Which preset applies is a pure function of the NOISE-SPACE Z. Every chunk
+ * samples the same function, so at a shared edge two neighbours compute the
+ *
+ * ------------------------------------------------------------------ */
+
+export const PRESET_BAND_LENGTH = 2560; // length of primary preset
+export const PRESET_BLEND_WIDTH = 2000; // length of each crossfade
+
+function smoothstep(t) {
+  return t * t * (3 - 2 * t);
+}
+
+function hashInt(n) {
+  let h = Math.imul(n ^ 0x9e3779b9, 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 3266489917);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+const cycleCache = new Map();
+function shuffledCycle(cycle) {
+  const cached = cycleCache.get(cycle);
+  if (cached) return cached;
+
+  const n = PRESET_LIST.length;
+  const order = [];
+  for (let i = 0; i < n; i++) order.push(i);
+
+  let seed = hashInt(cycle);
+  for (let i = n - 1; i > 0; i--) {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    const j = seed % (i + 1);
+    const tmp = order[i];
+    order[i] = order[j];
+    order[j] = tmp;
+  }
+
+  if (cycleCache.size > 512) cycleCache.clear();
+  cycleCache.set(cycle, order);
+  return order;
+}
+
+export function presetIndexForBand(band) {
+  const n = PRESET_LIST.length;
+  const cycle = Math.floor(band / n);
+  const pos = band - cycle * n; // 0..n-1, correct for negative bands too
+  return shuffledCycle(cycle)[pos];
 }
 
 /**
- * Generates heights for a plane geometry based on a preset.
- * @param {THREE.PlaneGeometry} geometry
- * @param {number} segments                 // segments per side (power of 2)
- * @param {number} chunkSize                // world size of the chunk
- * @param {{x:number, z:number}} worldOrigin // chunk center in world space
- * @param {{octaves: {freq:number, amp:number}[]}} preset
+ * Preset mix at a noise-space Z. Returns one entry outside a crossfade,
+ * two inside one. Weights always sum to 1.
+ *
+ * @param {number} z noise-space Z
+ * @returns {{preset: object, weight: number}[]}
  */
-export function generateHeights(
-  geometry,
-  segments,
-  chunkSize,
-  worldOrigin,
-  preset,
-) {
+
+export function presetMixAt(z) {
+  const half = PRESET_BLEND_WIDTH / 2;
+  const shifted = z + half;
+
+  const band = Math.floor(shifted / PRESET_BAND_LENGTH);
+  const r = shifted - band * PRESET_BAND_LENGTH;
+
+  const current = PRESET_LIST[presetIndexForBand(band)];
+
+  if (r < PRESET_BLEND_WIDTH) {
+    const previous = PRESET_LIST[presetIndexForBand(band - 1)];
+    if (previous === current) return [{ preset: current, weight: 1 }];
+
+    const t = smoothstep(r / PRESET_BLEND_WIDTH);
+    return [
+      { preset: previous, weight: 1 - t },
+      { preset: current, weight: t },
+    ];
+  }
+
+  return [{ preset: current, weight: 1 }];
+}
+
+/**
+ * Generates heights AND vertex colours for a plane geometry.
+ */
+export function generateHeights(geometry, segments, chunkSize, worldOrigin) {
   const position = geometry.attributes.position;
+  const colorAttr = geometry.attributes.color;
   const vertsPerRow = segments + 1;
   const step = chunkSize / segments;
   const half = chunkSize / 2;
   const { x: ox, z: oz } = worldOrigin;
 
-  // After geometry.rotateX(-PI/2), local X = world X, local Z = world Z.
+  const scratch = new THREE.Color();
+
   for (let iy = 0; iy <= segments; iy++) {
+    const lz = -half + iy * step;
+    const wz = oz + lz;
+
+    const mix = presetMixAt(wz);
+
+    let cr = 0;
+    let cg = 0;
+    let cb = 0;
+    for (const { preset, weight } of mix) {
+      scratch.setHex(preset.color);
+      cr += scratch.r * weight;
+      cg += scratch.g * weight;
+      cb += scratch.b * weight;
+    }
+
     for (let ix = 0; ix <= segments; ix++) {
       const i = iy * vertsPerRow + ix;
+      const wx = ox + (-half + ix * step);
 
-      const lx = -half + ix * step;
-      const lz = -half + iy * step;
+      let h = 0;
+      for (const { preset, weight } of mix) {
+        h += weight * fbm(wx, wz, preset.octaves);
+      }
+      position.setY(i, h);
 
-      const wx = ox + lx;
-      const wz = oz + lz;
-
-      position.setY(i, fbm(wx, wz, preset.octaves));
+      if (colorAttr) colorAttr.setXYZ(i, cr, cg, cb);
     }
   }
 
   position.needsUpdate = true;
+  if (colorAttr) colorAttr.needsUpdate = true;
   geometry.computeVertexNormals();
 }
 
@@ -107,7 +178,6 @@ export function createTerrain(options = {}) {
     chunkSize = 320,
     segments = 64,
     worldOrigin = { x: 0, z: 0 },
-    preset = TERRAIN_PRESETS.rolling,
   } = options;
 
   const geometry = new THREE.PlaneGeometry(
@@ -116,37 +186,25 @@ export function createTerrain(options = {}) {
     segments,
     segments,
   );
-  geometry.rotateX(-Math.PI / 2); // Now plane lies in XZ, height is Y.
+  geometry.rotateX(-Math.PI / 2);
 
-  generateHeights(geometry, segments, chunkSize, worldOrigin, preset);
+  const count = geometry.attributes.position.count;
+  geometry.setAttribute(
+    "color",
+    new THREE.Float32BufferAttribute(new Float32Array(count * 3).fill(1), 3),
+  );
+
+  generateHeights(geometry, segments, chunkSize, worldOrigin);
 
   const material = new THREE.MeshBasicMaterial({
-    color: preset.color,
+    vertexColors: true,
     wireframe: true,
     side: THREE.DoubleSide,
   });
 
-  const mesh = new THREE.Mesh(geometry, material);
-  // No mesh.rotation — geometry is already in world orientation.
-  return mesh;
+  return new THREE.Mesh(geometry, material);
 }
 
-/**
- *
- * @param {THREE.Mesh} mesh
- * @param {number} segments
- * @param {number} chunkSize
- * @param {{x:number, z:number}} worldOrigin
- * @param {object} preset
- */
-
-export function regenerateTerrain(
-  mesh,
-  segments,
-  chunkSize,
-  worldOrigin,
-  preset,
-) {
-  generateHeights(mesh.geometry, segments, chunkSize, worldOrigin, preset);
-  mesh.material.color.setHex(preset.color);
+export function regenerateTerrain(mesh, segments, chunkSize, worldOrigin) {
+  generateHeights(mesh.geometry, segments, chunkSize, worldOrigin);
 }

@@ -1,5 +1,3 @@
-// noise.js
-
 function hash(x, y) {
   let h = Math.imul(x, 374761393) + Math.imul(y, 668265263);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
