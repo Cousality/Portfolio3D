@@ -17,7 +17,7 @@ import * as THREE from "three";
 export function createScene(options = {}) {
   const {
     canvasSelector = "#bg",
-    fov = 75,
+    fov = 65,
     near = 0.1,
     far = 2000,
     cameraPosition = { x: 0, y: 25, z: 200 },

@@ -29,8 +29,8 @@ export const TERRAIN_PRESETS = {
   peaks: {
     color: 0xff2266, // hot pink/magenta
     octaves: [
-      { freq: 0.006, amp: 55 },
-      { freq: 0.025, amp: 20 },
+      { freq: 0.006, amp: 20 },
+      { freq: 0.025, amp: 10 },
       { freq: 0.08, amp: 8 },
       { freq: 0.25, amp: 2 },
     ],
@@ -104,8 +104,8 @@ export function generateHeights(
 
 export function createTerrain(options = {}) {
   const {
-    chunkSize = 160,
-    segments = 32,
+    chunkSize = 320,
+    segments = 64,
     worldOrigin = { x: 0, z: 0 },
     preset = TERRAIN_PRESETS.rolling,
   } = options;

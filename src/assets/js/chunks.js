@@ -4,29 +4,25 @@ import {
   TERRAIN_PRESETS,
 } from "./terrain.js";
 
-export const CHUNK_SIZE = 160;
-export const CHUNK_COUNT = 16;
-export const SEGMENTS = 32;
+export const CHUNK_SIZE = 2560;
+export const CHUNK_COUNT = 8;
+export const SEGMENTS = 512;
 
-/**
- * Builds a pool of terrain chunks laid out along -Z.
- * Each chunk's world origin is set from its index so heights are consistent.
- *
- * @param {THREE.Scene} scene
- * @param {object} preset   preset used for all chunks in the pool
- * @returns {THREE.Mesh[]}
- */
+// The noise-space Z that the next recycled chunk will sample.
+// This marches monotonically backwards and is completely independent of the
+// scene positions (which cycle around a fixed range).
+let nextWorldZ = 0;
+
 export function createChunkPool(scene, preset = TERRAIN_PRESETS.rolling) {
   const chunks = [];
 
   for (let i = 0; i < CHUNK_COUNT; i++) {
     const z = -i * CHUNK_SIZE;
-    const worldOrigin = { x: 0, z };
 
     const mesh = createTerrain({
       chunkSize: CHUNK_SIZE,
       segments: SEGMENTS,
-      worldOrigin,
+      worldOrigin: { x: 0, z }, // scene pos == noise pos at spawn
       preset,
     });
 
@@ -35,42 +31,35 @@ export function createChunkPool(scene, preset = TERRAIN_PRESETS.rolling) {
     chunks.push(mesh);
   }
 
+  // The next chunk that recycles will continue from just past the pool.
+  nextWorldZ = -CHUNK_COUNT * CHUNK_SIZE;
   return chunks;
 }
 
-/**
- * Moves chunks toward the camera and recycles any that pass it.
- * On recycle, regenerates heights for the chunk's new world position.
- *
- * @param {THREE.Mesh[]} chunks
- * @param {number} speed
- * @param {number} cameraZ
- * @param {object} preset       preset to regenerate with
- * @returns {number}            number of chunks recycled this frame
- */
 export function updateChunks(chunks, speed, cameraZ, preset) {
   let recycled = 0;
 
-  // Snapshot minimum z before moving anything
+  // 1) Move everything first so the min we find is the real back edge.
+  for (const c of chunks) c.position.z += speed;
+
   let minZ = Infinity;
   for (const c of chunks) if (c.position.z < minZ) minZ = c.position.z;
 
+  // 2) Recycle anything past the camera, stacking each one behind the back
+  //    and advancing the noise-space Z by CHUNK_SIZE so it samples new terrain.
   for (const c of chunks) {
-    c.position.z += speed;
-
-    // Whole chunk has passed the camera -> teleport to the back
     if (c.position.z - CHUNK_SIZE / 2 > cameraZ) {
-      c.position.z = minZ - CHUNK_SIZE;
-      minZ = c.position.z;
+      minZ -= CHUNK_SIZE;
+      c.position.z = minZ;
 
-      // Regenerate heights so this chunk matches its new neighbors.
       regenerateTerrain(
         c,
         SEGMENTS,
         CHUNK_SIZE,
-        { x: 0, z: c.position.z },
+        { x: 0, z: nextWorldZ },
         preset,
       );
+      nextWorldZ -= CHUNK_SIZE;
 
       recycled++;
     }

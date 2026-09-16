@@ -19,11 +19,16 @@ const chunks = createChunkPool(scene, preset);
 const stars = createStarfield();
 scene.add(stars);
 
+let scroll = 0;
+
 function animate() {
   requestAnimationFrame(animate);
 
+  const speed = 0.5;
+  scroll += speed;
+
   updateStarfield(stars);
-  updateChunks(chunks, 0.2, camera.position.z, preset);
+  updateChunks(chunks, speed, camera.position.z, preset, scroll);
 
   renderer.render(scene, camera);
 }
