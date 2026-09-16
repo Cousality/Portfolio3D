@@ -64,7 +64,7 @@ export function createStarfield(options = {}) {
 export function updateStarfield(starfield, options = {}) {
   const { speed, depth, spread, skyBase, skyHeight } = {
     ...starfield.userData.starOptions,
-    speed: 0.5,
+    speed: 0.1,
     ...options,
   };
 

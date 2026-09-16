@@ -2,7 +2,7 @@ import { createTerrain, regenerateTerrain } from "./terrain.js";
 
 export const CHUNK_SIZE = 2560;
 export const CHUNK_COUNT = 8;
-export const SEGMENTS = 512;
+export const SEGMENTS = 256;
 
 let nextWorldZ = 0;
 
