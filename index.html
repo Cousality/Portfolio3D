@@ -1,25 +1,39 @@
 <!doctype html>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link
-  href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap"
-  rel="stylesheet"
-/>
 <html lang="en">
   <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Cole Bailey</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
   </head>
+
   <body>
     <canvas id="bg"></canvas>
 
-    <div class="content">
-      <p class="name">Cole Bailey</p>
-      <p id="p2">Work</p>
-      <p id="p2">Projects</p>
-      <p id="p2">Clients</p>
-      <p id="p2">Tools</p>
-      <p id="p3">Contact</p>
+    <div class="ui">
+      <button class="name" data-modal="about">Cole Bailey</button>
+
+      <nav class="nav" aria-label="Primary">
+        <button data-modal="work">Work</button>
+        <button data-modal="projects">Projects</button>
+        <button data-modal="clients">Clients</button>
+        <button data-modal="tools">Tools</button>
+      </nav>
+
+      <button class="contact" data-modal="contact">
+        <span class="dot"></span>Contact
+      </button>
+
+      <p class="meta">© 2026 — Available for work</p>
     </div>
+
     <script type="module" src="./src/assets/js/main.js"></script>
   </body>
 </html>
