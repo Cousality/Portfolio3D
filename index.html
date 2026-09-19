@@ -18,7 +18,7 @@
     <canvas id="bg"></canvas>
 
     <div class="ui">
-      <button class="name" data-modal="about">Cole Bailey</button>
+      <button class="name" data-modal="about" id="open">Cole Bailey</button>
 
       <nav class="nav" aria-label="Primary">
         <button data-modal="work">Work</button>
@@ -34,6 +34,27 @@
       <p class="meta">© 2026 — Available for work</p>
     </div>
 
+    <div class="modal-container" id="modal-container">
+      <div class="modal">
+        <h1>About</h1>
+        <p>
+          Lorem ipsum dolor sit amet consectetur adipiscing elit. 
+          Quisque faucibus ex sapien vitae pellentesque sem placerat. 
+          In id cursus mi pretium tellus duis convallis. 
+          Tempus leo eu aenean sed diam urna tempor. 
+          Pulvinar vivamus fringilla lacus nec metus bibendum egestas. 
+          Iaculis massa nisl malesuada lacinia integer nunc posuere. 
+          Ut hendrerit semper vel class aptent taciti sociosqu. 
+          Ad litora torquent per conubia nostra inceptos himenaeos.
+        </p>
+        <Button id = "close">
+          close 
+        </Button>
+      </div>
+    
+    </div>
+
     <script type="module" src="./src/assets/js/main.js"></script>
+    <script type="module" src="./src/assets/js/menu/modal.js"></script>
   </body>
 </html>
