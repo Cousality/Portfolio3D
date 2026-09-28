@@ -24,6 +24,22 @@ const content = {
   contact: contactHtml,
 };
 
+const images = import.meta.glob("../../Images/*.{png,jpg,jpeg,webp,svg}", {
+  eager: true,
+  query: "?url",
+  import: "default",
+});
+
+function resolveImages(root) {
+  root.querySelectorAll("img").forEach((img) => {
+    const file = img.getAttribute("src").split("/").pop();
+    const match = Object.entries(images).find(([path]) =>
+      path.endsWith("/" + file),
+    );
+    if (match) img.src = match[1];
+  });
+}
+
 let lastFocused = null;
 
 function openModal(key) {
@@ -31,6 +47,7 @@ function openModal(key) {
   if (!html) return;
 
   modalBody.innerHTML = html;
+  resolveImages(modalBody);
 
   const heading = modalBody.querySelector("h1");
   if (heading) heading.id = "modal-title";
