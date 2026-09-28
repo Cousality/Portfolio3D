@@ -1,4 +1,5 @@
 import "../css/style.css";
+import "../css/modal.css";
 import { createScene } from "./scene.js";
 import { createStarfield, updateStarfield } from "./starfield.js";
 import { createChunkPool, updateChunks } from "./chunks.js";
